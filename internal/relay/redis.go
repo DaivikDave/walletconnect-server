@@ -3,6 +3,7 @@ package relay
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/DaivikDave/walletconnect-server/internal/relay/jsonrpc"
@@ -47,8 +48,18 @@ func (r *Redis) SetMessage(params jsonrpc.PublishParams) error {
 	return nil
 }
 
-func (r *Redis) GetMessage(topic string, hash string) error {
+func (r *Redis) GetMessage(topic string, hash string) (string, error) {
+	topic = fmt.Sprintf("message:%s", r.addPrefix(topic))
+	pattern := fmt.Sprintf("%s:*", hash)
+	messages, err := r.sScan(topic, pattern, 0)
+	if err != nil {
+		return "", err
+	}
+	if len(messages) > 0 {
+		return strings.Split(messages[0], ":")[1], nil
+	}
 
+	return "", fmt.Errorf("No message with topic")
 }
 
 func (r *Redis) GetMessages(topic string) ([]string, error) {
@@ -93,4 +104,21 @@ func (r *Redis) addPrefix(key string) string {
 
 func (r *Redis) setPrefix(prefix string) {
 	r.prefix = prefix + ":"
+}
+
+func (r *Redis) sScan(key string, pattern string, cursor uint64) ([]string, error) {
+	var result []string
+	for {
+		var messages []string
+		var err error
+		messages, cursor, err = r.Client.SScan(context.Background(), key, cursor, pattern, 10).Result()
+		if err != nil {
+			return nil, err
+		}
+		if cursor == 0 {
+			break
+		}
+		result = append(result, messages...)
+	}
+	return result, nil
 }

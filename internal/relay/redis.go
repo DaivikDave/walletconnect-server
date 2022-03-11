@@ -63,7 +63,19 @@ func (r *Redis) GetMessage(topic string, hash string) (string, error) {
 }
 
 func (r *Redis) GetMessages(topic string) ([]string, error) {
+	topic = fmt.Sprintf("message:%s", r.addPrefix(topic))
+	var result []string
+	messages, err := r.Client.SMembers(context.Background(), topic).Result()
 
+	if err != nil {
+		return nil, err
+	}
+
+	for _, message := range messages {
+		result = append(result, strings.Split(message, ":")[1])
+	}
+
+	return result, nil
 }
 
 func (r *Redis) DeleteMessage(topic string, hash string) error {
